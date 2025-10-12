@@ -59,8 +59,8 @@ class FeedForwardBlock(nn.Module):
         self.d_model = d_model
         self.d_ff = d_ff
         self.dropout = dropout
-        self.linear1 = nn.Linear(d_model, d_ff)
-        self.linear2 = nn.Linear(d_ff, d_model)
+        self.linear1 = nn.Linear(d_model, d_ff) # W1 and b1 in paper
+        self.linear2 = nn.Linear(d_ff, d_model) # W2 and b2 in paper
         self.relu = nn.ReLU()
         self.dropout_layer = nn.Dropout(dropout)
 
@@ -71,3 +71,32 @@ class FeedForwardBlock(nn.Module):
         x = self.dropout_layer(x)
         x = self.linear2(x)
         return x
+
+class MultiheadAttentionBlock(nn.Module):
+
+    def __init__(self, d_model: int, num_heads: int, dropout: float):
+        super(MultiheadAttentionBlock, self).__init__()
+        assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+        self.dropout = dropout
+
+        self.w_q = nn.Linear(d_model, d_model)
+        self.w_k = nn.Linear(d_model, d_model)
+        self.w_v = nn.Linear(d_model, d_model)
+        self.w_o = nn.Linear(d_model, d_model)
+        self.dropout_layer = nn.Dropout(dropout)
+        self.softmax = nn.Softmax(dim=-1)
+    
+    def forward(self, query, key, value, mask=None):
+        batch_size = query.size(0)
+
+        # Linear projections
+        Q = self.w_q(query) # (batch_size, seq_len, d_model) -> (batch_size, seq_len, d_model)
+        K = self.w_k(key)   # (batch_size, seq_len, d_model) -> (batch_size, seq_len, d_model)
+        V = self.w_v(value) # (batch_size, seq_len, d_model) -> (batch_size, seq_len, d_model)
+
+        Q = Q.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)   # (batch_size, seq_len, d_model) -> (batch_size, seq_len, num_heads, d_k) --> (batch_size, num_heads, seq_len, d_k)
+        K = K.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)   # (batch_size, seq_len, d_model) -> (batch_size, seq_len, num_heads, d_k) --> (batch_size, num_heads, seq_len, d_k)
+        V = V.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)   # (batch_size, seq_len, d_model) -> (batch_size, seq_len, num_heads, d_k) --> (batch_size, num_heads, seq_len, d_k)
