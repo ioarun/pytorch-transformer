@@ -118,3 +118,15 @@ class MultiheadAttentionBlock(nn.Module):
         x = x.transpose(1, 2).contiguous().view(batch_size, -1, self.d_model) # (batch_size, num_heads, seq_len, d_k) -> (batch_size, seq_len, num_heads, d_k) -> (batch_size, seq_len, d_model)
         x = self.w_o(x) # (batch_size, seq_len, d_model) -> (batch_size, seq_len, d_model)
         return x
+    
+class ResidualConnectionBlock(nn.Module):
+
+    def __init__(self, d_model: int, dropout: float):
+        super(ResidualConnectionBlock, self).__init__()
+        self.d_model = d_model
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = LayerNormalization(d_model)
+
+    def forward(self, x, sublayer):
+        # Apply layer normalization, then the sublayer (e.g., attention or feed-forward), then dropout, and add the original input (residual connection)
+        return x + self.dropout(sublayer(self.layer_norm(x)))
