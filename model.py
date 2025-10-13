@@ -87,8 +87,20 @@ class MultiheadAttentionBlock(nn.Module):
         self.w_v = nn.Linear(d_model, d_model)
         self.w_o = nn.Linear(d_model, d_model)
         self.dropout_layer = nn.Dropout(dropout)
-        self.softmax = nn.Softmax(dim=-1)
-    
+      
+    @staticmethod
+    def attention(Q, K, V, mask=None, dropout=None):
+        d_k = Q.shape[-1]
+
+        attention_scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(d_k)  # (batch_size, num_heads, seq_len, d_k) x (batch_size, num_heads, d_k, seq_len) -> (batch_size, num_heads, seq_len, seq_len)
+        if mask is not None:
+            attention_scores = attention_scores.masked_fill(mask == 0, float('-inf'))
+        attention_scores = attention_scores.softmax(dim=-1) # (batch_size, num_heads, seq_len, seq_len)
+        if dropout is not None:
+            attention_scores = dropout(attention_scores)
+        output = torch.matmul(attention_scores, V)
+        return output, attention_scores
+
     def forward(self, query, key, value, mask=None):
         batch_size = query.size(0)
 
@@ -100,3 +112,9 @@ class MultiheadAttentionBlock(nn.Module):
         Q = Q.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)   # (batch_size, seq_len, d_model) -> (batch_size, seq_len, num_heads, d_k) --> (batch_size, num_heads, seq_len, d_k)
         K = K.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)   # (batch_size, seq_len, d_model) -> (batch_size, seq_len, num_heads, d_k) --> (batch_size, num_heads, seq_len, d_k)
         V = V.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)   # (batch_size, seq_len, d_model) -> (batch_size, seq_len, num_heads, d_k) --> (batch_size, num_heads, seq_len, d_k)
+
+        x, self.attention_scores = MultiheadAttentionBlock.attention(Q, K, V, mask=mask, dropout=self.dropout_layer)
+        # Concatenate heads and put through final linear layer
+        x = x.transpose(1, 2).contiguous().view(batch_size, -1, self.d_model) # (batch_size, num_heads, seq_len, d_k) -> (batch_size, seq_len, num_heads, d_k) -> (batch_size, seq_len, d_model)
+        x = self.w_o(x) # (batch_size, seq_len, d_model) -> (batch_size, seq_len, d_model)
+        return x
