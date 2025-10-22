@@ -143,3 +143,30 @@ class EncoderBlock(nn.Module):
         x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, src_mask))
         x = self.residual_connections[1](x, self.feed_forward_block)
         return x
+
+class Encoder(nn.Module):
+
+    def __init__(self, num_layers: int, self_attention_block: MultiheadAttentionBlock, feed_forward_block: FeedForwardBlock, dropout: float):
+        super(Encoder, self).__init__()
+        self.layers = nn.ModuleList([EncoderBlock(self_attention_block, feed_forward_block, dropout) for _ in range(num_layers)])
+        self.layer_norm = LayerNormalization(self_attention_block.d_model)
+
+    def forward(self, x, src_mask=None):
+        for layer in self.layers:
+            x = layer(x, src_mask)
+        return self.layer_norm(x)
+    
+class DecoderBlock(nn.Module):
+
+    def __init__(self, self_attention_block: MultiheadAttentionBlock, cross_attention_block: MultiheadAttentionBlock, feed_forward_block: FeedForwardBlock, dropout: float):
+        super(DecoderBlock, self).__init__()
+        self.self_attention_block = self_attention_block
+        self.cross_attention_block = cross_attention_block
+        self.feed_forward_block = feed_forward_block
+        self.residual_connections = nn.ModuleList([ResidualConnection(self_attention_block.d_model, dropout) for _ in range(3)])
+
+    def forward(self, x, enc_output, src_mask=None, tgt_mask=None):
+        x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, tgt_mask))
+        x = self.residual_connections[1](x, lambda x: self.cross_attention_block(x, enc_output, enc_output, src_mask))
+        x = self.residual_connections[2](x, self.feed_forward_block)
+        return x
