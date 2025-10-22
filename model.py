@@ -170,3 +170,29 @@ class DecoderBlock(nn.Module):
         x = self.residual_connections[1](x, lambda x: self.cross_attention_block(x, enc_output, enc_output, src_mask))
         x = self.residual_connections[2](x, self.feed_forward_block)
         return x
+    
+
+class Decoder(nn.Module):
+
+    def __init__(self, num_layers: int, self_attention_block: MultiheadAttentionBlock, cross_attention_block: MultiheadAttentionBlock, feed_forward_block: FeedForwardBlock, dropout: float):
+        super(Decoder, self).__init__()
+        self.layers = nn.ModuleList([DecoderBlock(self_attention_block, cross_attention_block, feed_forward_block, dropout) for _ in range(num_layers)])
+        self.layer_norm = LayerNormalization(self_attention_block.d_model)
+
+    def forward(self, x, enc_output, src_mask=None, tgt_mask=None):
+        for layer in self.layers:
+            x = layer(x, enc_output, src_mask, tgt_mask)
+        return self.layer_norm(x)
+    
+
+class ProjectionLayer(nn.Module):
+
+    def __init__(self, d_model: int, vocab_size: int):
+        super(ProjectionLayer, self).__init__()
+        self.d_model = d_model
+        self.vocab_size = vocab_size
+        self.linear = nn.Linear(d_model, vocab_size)
+
+    def forward(self, x):
+        # (batch_size, seq_len, d_model) -> (batch_size, seq_len, vocab_size)
+        return torch.log_softmax(self.linear(x), dim=-1)
