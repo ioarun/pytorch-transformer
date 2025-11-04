@@ -184,7 +184,6 @@ class Decoder(nn.Module):
             x = layer(x, enc_output, src_mask, tgt_mask)
         return self.layer_norm(x)
     
-
 class ProjectionLayer(nn.Module):
 
     def __init__(self, d_model: int, vocab_size: int):
@@ -196,3 +195,46 @@ class ProjectionLayer(nn.Module):
     def forward(self, x):
         # (batch_size, seq_len, d_model) -> (batch_size, seq_len, vocab_size)
         return torch.log_softmax(self.linear(x), dim=-1)
+
+class Transformer(nn.Module):
+
+    def __init__(self, src_vocab_size: int, tgt_vocab_size: int, seq_len: int, d_model: int, num_heads: int, d_ff: int, num_layers: int, dropout: float):
+        super(Transformer, self).__init__()
+        self.src_embedding = InputEmbedding(src_vocab_size, d_model)
+        self.tgt_embedding = InputEmbedding(tgt_vocab_size, d_model)
+        self.positional_encoding = PositionalEncoding(seq_len, d_model, dropout)
+
+        self.self_attention_block = MultiheadAttentionBlock(d_model, num_heads, dropout)
+        self.cross_attention_block = MultiheadAttentionBlock(d_model, num_heads, dropout)
+        self.feed_forward_block = FeedForwardBlock(d_model, d_ff, dropout)
+
+        self.encoder = Encoder(num_layers, self.self_attention_block, self.feed_forward_block, dropout)
+        self.decoder = Decoder(num_layers, self.self_attention_block, self.cross_attention_block, self.feed_forward_block, dropout)
+
+        self.projection_layer = ProjectionLayer(d_model, tgt_vocab_size)
+
+    def forward(self, src, tgt, src_mask=None, tgt_mask=None):
+        # Encode
+        src_embedded = self.positional_encoding(self.src_embedding(src))
+        enc_output = self.encoder(src_embedded, src_mask)
+
+        # Decode
+        tgt_embedded = self.positional_encoding(self.tgt_embedding(tgt))
+        dec_output = self.decoder(tgt_embedded, enc_output, src_mask, tgt_mask)
+
+        # Project to vocabulary
+        output = self.projection_layer(dec_output)
+        return output
+    
+
+def build_transformer(src_vocab_size: int, tgt_vocab_size: int, seq_len: int = 512, d_model: int = 512, num_heads: int = 8, d_ff: int = 2048, num_layers: int = 6, dropout: float = 0.1) -> Transformer:
+    return Transformer(
+        src_vocab_size=src_vocab_size,
+        tgt_vocab_size=tgt_vocab_size,
+        seq_len=seq_len,
+        d_model=d_model,
+        num_heads=num_heads,
+        d_ff=d_ff,
+        num_layers=num_layers,
+        dropout=dropout
+    )
