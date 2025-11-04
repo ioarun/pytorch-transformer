@@ -24,3 +24,16 @@ def get_or_build_tokenizer(config, ds, lang):
         tokenizer = Tokenizer.from_file(tokenizer_path)
     return tokenizer
 
+def get_ds(config):
+    ds_raw = load_dataset(config['dataset_name'], f'{config["lang_src"]}-{config["lang_tgt"]}', split='train')
+
+    # Build tokenizers
+    tokenizer_src = get_or_build_tokenizer(config, ds_raw, config['lang_src'])
+    tokenizer_tgt = get_or_build_tokenizer(config, ds_raw, config['lang_tgt'])
+
+    # Keep 90% for training, 10% for validation
+    train_ds_size = int(0.9 * len(ds_raw))
+    val_ds_size = len(ds_raw) - train_ds_size
+    ds_train, ds_val = torch.utils.data.random_split(ds_raw, [train_ds_size, val_ds_size])
+    
+    return ds_train, ds_val, tokenizer_src, tokenizer_tgt
