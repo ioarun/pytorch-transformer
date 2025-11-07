@@ -1,5 +1,8 @@
 import torch
 import torch.nn as nn
+
+from dataset import BilingualDataset, causal_mask
+
 from datasets import load_dataset
 from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
@@ -34,6 +37,11 @@ def get_ds(config):
     # Keep 90% for training, 10% for validation
     train_ds_size = int(0.9 * len(ds_raw))
     val_ds_size = len(ds_raw) - train_ds_size
-    ds_train, ds_val = torch.utils.data.random_split(ds_raw, [train_ds_size, val_ds_size])
+    ds_train_raw, ds_val_raw = torch.utils.data.random_split(ds_raw, [train_ds_size, val_ds_size])
+
+    train_dataset = BilingualDataset(ds_train_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
+    val_dataset = BilingualDataset(ds_val_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
     
-    return ds_train, ds_val, tokenizer_src, tokenizer_tgt
+    max_len_src = 0
+    max_len_tgt = 0
+    
