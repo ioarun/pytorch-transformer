@@ -34,7 +34,7 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        x = (x + self.pe[:, :x.size(1), :]).require_grad_(False)
+        x = (x + self.pe[:, :x.size(1), :]).detach().requires_grad_(False)
         x = self.dropout(x)
         return x
     
@@ -213,21 +213,39 @@ class Transformer(nn.Module):
 
         self.projection_layer = ProjectionLayer(d_model, tgt_vocab_size)
 
-    def forward(self, src, tgt, src_mask=None, tgt_mask=None):
+    def encode(self, src, src_mask):
         # Encode
+        # (batch, seq_len, d_model)
         src_embedded = self.positional_encoding(self.src_embedding(src))
         enc_output = self.encoder(src_embedded, src_mask)
-
+        return enc_output
+    
+    def decode(self, encoder_output: torch.Tensor, src_mask: torch.Tensor, tgt: torch.Tensor, tgt_mask: torch.Tensor):
+        # (batch, seq_len, d_model)
         # Decode
         tgt_embedded = self.positional_encoding(self.tgt_embedding(tgt))
-        dec_output = self.decoder(tgt_embedded, enc_output, src_mask, tgt_mask)
+        dec_output = self.decoder(tgt_embedded, encoder_output, src_mask, tgt_mask)
+        return dec_output
+    
+    def project(self, x):
+        # (batch, seq_len, vocab_size)
+        return self.projection_layer(x)
 
-        # Project to vocabulary
-        output = self.projection_layer(dec_output)
-        return output
+    # def forward(self, src, tgt, src_mask=None, tgt_mask=None):
+    #     # Encode
+    #     src_embedded = self.positional_encoding(self.src_embedding(src))
+    #     enc_output = self.encoder(src_embedded, src_mask)
+
+    #     # Decode
+    #     tgt_embedded = self.positional_encoding(self.tgt_embedding(tgt))
+    #     dec_output = self.decoder(tgt_embedded, enc_output, src_mask, tgt_mask)
+
+    #     # Project to vocabulary
+    #     output = self.projection_layer(dec_output)
+    #     return output
     
 
-def build_transformer(src_vocab_size: int, tgt_vocab_size: int, seq_len: int = 512, d_model: int = 512, num_heads: int = 8, d_ff: int = 2048, num_layers: int = 6, dropout: float = 0.1) -> Transformer:
+def build_transformer(src_vocab_size: int, tgt_vocab_size: int, seq_len: int, d_model: int = 512, num_heads: int = 8, d_ff: int = 2048, num_layers: int = 6, dropout: float = 0.1) -> Transformer:
     return Transformer(
         src_vocab_size=src_vocab_size,
         tgt_vocab_size=tgt_vocab_size,
